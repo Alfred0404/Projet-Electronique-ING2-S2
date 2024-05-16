@@ -34,7 +34,7 @@ const int TARGET = 96;
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
   Wire.begin();
   mpu6050.initialize();
   servo_gauche.attach(10);
@@ -63,36 +63,30 @@ float sigmoidInverse(float x, float a)
   return 1 / (1 + exp(a * (x - 86))); //  changer pour 80
 }
 
-
-//! frauduleux de ouf
-// float calculer_vitesse(float acc_x) {
-//   vitesse_x += acc_x;
-//   return vitesse_x;
-// }
-
-
 /*
-  * Fonction pour obtenir l'accélération de l'IMU
-  * @return : l'accélération mesurée
-*/
-int get_acceleration() {
-  int16_t acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z;
-  mpu6050.getMotion6(&acc_x, &acc_y, &acc_z, &gyro_x, &gyro_y, &gyro_z);
+ * Fonction pour obtenir l'accélération de l'IMU
+ * @return : l'accélération mesurée (pas d'unité)
+ */
+int16_t get_acceleration()
+{
+  int16_t angle_x, angle_y, angle_z, gyro_x, gyro_y, gyro_z;
+  mpu6050.getMotion6(&angle_x, &angle_y, &angle_z, &gyro_x, &gyro_y, &gyro_z);
 
-  Serial.println("Acceleration x : " + String(acc_x));
+  // Serial.println("Acceleration x : " + String(gyro_y));
 
-  return acc_x;
+  // gyro_y réagit plutot pas mal au changement de vitesse (proche de 0 = bouge pas; < 0 = recule; > 0 = avance)
+  return gyro_y / 100;
 }
-
 
 /*
  * Fonction pour calculer l'angle de l'IMU
+ * @return : angle de l'IMU
  */
 float calculer_angle()
 {
-  int16_t acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z;
-  mpu6050.getMotion6(&acc_x, &acc_y, &acc_z, &gyro_x, &gyro_y, &gyro_z);
-  float angle = atan2((double)acc_y / 16384.0, (double)acc_z / 16384.0) * 180 / PI;
+  int16_t angle_x, angle_y, angle_z, gyro_x, gyro_y, gyro_z;
+  mpu6050.getMotion6(&angle_x, &angle_y, &angle_z, &gyro_x, &gyro_y, &gyro_z);
+  float angle = atan2((double)angle_y / 16384.0, (double)angle_z / 16384.0) * 180 / PI;
   return angle;
 }
 
@@ -164,29 +158,33 @@ void rotate_servos(double servo_value)
 
 void loop()
 {
-  input = calculer_angle();
-  input = moyenne_mobile(input); // Lissage des valeurs de l'angle
+  //! décommenter pour le scénario de stabilité
+  // input = calculer_angle();
+  // input = moyenne_mobile(input); // Lissage des valeurs de l'angle
 
-  double output = calculer_pid(input);
+  // double output = calculer_pid(input);
 
-  // Utiliser la fonction sigmoïde pour la plage 90 à 180
-  if (input >= 90)
-  {
-    output = 90 * sigmoid(input, a);
-  }
-  // Utiliser la fonction sigmoïde inversée pour la plage 0 à 90
-  else
-  {
-    output = 90 * sigmoidInverse(input, a);
-  }
-
-  // if (output < 2 && output > -2) {
-  //   output = 0;
+  // // Utiliser la fonction sigmoïde pour la plage 90 à 180
+  // if (input >= 90)
+  // {
+  //   output = 90 * sigmoid(input, a);
+  // }
+  // // Utiliser la fonction sigmoïde inversée pour la plage 0 à 90
+  // else
+  // {
+  //   output = 90 * sigmoidInverse(input, a);
   // }
 
-  rotate_servos(output);
+  // // if (output < 2 && output > -2) {
+  // //   output = 0;
+  // // }
 
-  Serial.println("input : " + String(input) + "\t output : " + String(output));
+  // rotate_servos(output);
+
+  // Serial.println("input : " + String(input) + "\t output : " + String(output));
+
+  int acceleration = moyenne_mobile(get_acceleration());
+  Serial.println("Acceleration x : " + String(acceleration));
 
   delay(10); // Gestion simple du temps d'échantillonnage
 }
