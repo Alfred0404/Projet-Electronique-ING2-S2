@@ -17,20 +17,26 @@ double input, output;
 // 2.5 | 0 | 1 | a=2      goatesque
 // 2.8 | 0 | 1 | a=3      très bon aussi
 
-// valeurs du PID
-double Kp = 2.5;
-double Ki = 0.01;
-double Kd = 1.8;
+// valeurs du PID angle
+double Kp_angle = 2.5;
+double Ki_angle = 0;
+double Kd_angle = 1;
+
+// valeurs PID vitesse
+double Kp_vitesse = 0.4;
+double Ki_vitesse = 0;
+double Kd_vitesse = 0;
 
 // coef a pour la sigmoid
-double a = 0.8;
+double a = 2;
 
 int vitesse_x = 0;
 int vitesse_y = 0;
 
 double previous_error = 0.01;
 double integral = 0;
-const int TARGET = 96;
+const int TARGET_ANGLE = 96;
+const int TARGET_ACCELERATION = 3;
 
 void setup()
 {
@@ -72,7 +78,6 @@ int16_t get_acceleration()
   int16_t angle_x, angle_y, angle_z, gyro_x, gyro_y, gyro_z;
   mpu6050.getMotion6(&angle_x, &angle_y, &angle_z, &gyro_x, &gyro_y, &gyro_z);
 
-  // Serial.println("Acceleration x : " + String(gyro_y));
 
   // gyro_y réagit plutot pas mal au changement de vitesse (proche de 0 = bouge pas; < 0 = recule; > 0 = avance)
   return gyro_y / 100;
@@ -114,9 +119,9 @@ float moyenne_mobile(float nouvel_angle)
  * Fonction pour calculer le PID
  * @param angle: angle de l'IMU
  */
-double calculer_pid(float angle)
+double calculer_pid(float Kp, float Ki, float Kd, float input, int target)
 {
-  double error = TARGET - input;
+  double error = target - input;
 
   integral += error;
   double derivative = (error - previous_error);
@@ -156,35 +161,58 @@ void rotate_servos(double servo_value)
   servo_droite.write(value_servo_droite);
 }
 
-void loop()
-{
-  //! décommenter pour le scénario de stabilité
-  // input = calculer_angle();
-  // input = moyenne_mobile(input); // Lissage des valeurs de l'angle
+void stabiliser_angle(int target_angle) {
+  float input = calculer_angle();
+  input = moyenne_mobile(input); // Lissage des valeurs de l'angle
 
-  // double output = calculer_pid(input);
+  double output = calculer_pid(Kp_angle, Ki_angle, Kd_angle, input, target_angle);
 
-  // // Utiliser la fonction sigmoïde pour la plage 90 à 180
-  // if (input >= 90)
-  // {
-  //   output = 90 * sigmoid(input, a);
+  // Utiliser la fonction sigmoïde pour la plage 90 à 180
+  if (input >= 90)
+  {
+    output = 90 * sigmoid(input, a);
+  }
+  // Utiliser la fonction sigmoïde inversée pour la plage 0 à 90
+  else
+  {
+    output = 90 * sigmoidInverse(input, a);
+  }
+
+  // if (output < 2 && output > -2) {
+  //   output = 0;
   // }
+
+  rotate_servos(90 + output);
+
+  // Serial.println("Angle : " + String(input) + "\t Output moteurs : " + String(output));
+}
+
+void stabiliser_acceleration() {
+  // int acceleration = moyenne_mobile(get_acceleration());
+  int acceleration = get_acceleration();
+  double output = calculer_pid(Kp_vitesse, Ki_vitesse, Kd_vitesse, acceleration, TARGET_ACCELERATION);
+
+  Serial.println("Vitesse : " + String(acceleration) + "\t Output angle : " + String(output));
+  // // Utiliser la fonction sigmoïde pour la plage 90 à 180
+  // if (acceleration >= 90)
+  // {
+  //   output = 90 * sigmoid(acceleration, a);
+  // }
+
   // // Utiliser la fonction sigmoïde inversée pour la plage 0 à 90
   // else
   // {
-  //   output = 90 * sigmoidInverse(input, a);
+  //   output = 90 * sigmoidInverse(acceleration, a);
   // }
 
-  // // if (output < 2 && output > -2) {
-  // //   output = 0;
-  // // }
+  stabiliser_angle(output);
 
-  // rotate_servos(output);
+}
 
-  // Serial.println("input : " + String(input) + "\t output : " + String(output));
-
-  int acceleration = moyenne_mobile(get_acceleration());
-  Serial.println("Acceleration x : " + String(acceleration));
+void loop()
+{
+  //! décommenter pour le scénario de stabilité
+  stabiliser_acceleration();
 
   delay(10); // Gestion simple du temps d'échantillonnage
 }
