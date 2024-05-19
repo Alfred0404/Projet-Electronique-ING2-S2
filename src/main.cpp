@@ -8,7 +8,9 @@ Servo servo_droite;
 
 const int taille_liste_angles = 10;      // Taille du tampon pour la moyenne mobile
 float liste_angles[taille_liste_angles]; // Tampon pour stocker les valeurs d'angle
-int index = 0;                           // Index actuel dans le tampon
+int index = 0;
+
+int compteur = 0; // Compteur pour gérer l'alternance des angles
 
 double input, output;
 
@@ -24,13 +26,20 @@ double Kd_vitesse = 0;
 
 float a = 2;
 
-// Limites de l'intégrale pour prévenir le "windup"
+// Limites de l'intégrale
 double integral_limit = 1000;
 
 double previous_error = 0.01;
 double integral = 0;
-int TARGET_ANGLE = 100;
-const int TARGET_ACCELERATION = 3;
+float TARGET_ANGLE = 96;
+float TARGET_ANGLE_AVANCER = 98;
+float TARGET_ACCELERATION = 3;
+
+// Variables pour interpolation douce
+float current_target_angle = TARGET_ANGLE;
+float angle_step = 0.1; // Incrément pour une transition douce
+
+unsigned long previous_time = 0; // Temps précédent pour gérer l'alternance
 
 void setup()
 {
@@ -75,7 +84,7 @@ float moyenne_mobile(float nouvel_angle)
   return moyenne_angles;
 }
 
-double calculer_pid(double Kp, double Ki, double Kd, double input, double target)
+double calculer_pid(double Kp, double Ki, double Kd, double input, float target)
 {
   double error = target - input;
 
@@ -102,7 +111,7 @@ double calculer_pid(double Kp, double Ki, double Kd, double input, double target
 
 void rotate_servos(double servo_value)
 {
-  if (servo_value < 10 && servo_value > -10)
+  if (servo_value < 6 && servo_value > -6)
   {
     servo_value = 0;
   }
@@ -113,20 +122,65 @@ void rotate_servos(double servo_value)
   servo_droite.write(value_servo_droite);
 }
 
-void stabiliser_angle(int target_angle)
+void stabiliser_angle(float target_angle)
 {
   float angle = calculer_angle();
   angle = moyenne_mobile(angle); // Lissage des valeurs de l'angle
 
   double output = calculer_pid(Kp_angle, Ki_angle, Kd_angle, angle, target_angle);
 
-  Serial.println("Angle : " + String(angle) + "\t Output moteurs : " + String(output));
+  Serial.print(">angle:");
+  Serial.println(angle);
+  // Serial.println("Angle : " + String(angle) + "\t Output moteurs : " + String(output));
 
   rotate_servos(output);
 }
 
+float transition_avancer_stabiliser(float current_target_angle) {
+  // Incrémenter le compteur
+  compteur++;
+
+  // Vérifier si le compteur est à une seconde
+  if (compteur % 100 == 0) // Étant donné que nous avons un delay(10) à la fin, 100 itérations équivalent à 1 seconde
+  {
+    // Alterner entre les deux angles cibles
+    if (TARGET_ANGLE == 96)
+    {
+      TARGET_ANGLE = TARGET_ANGLE_AVANCER;
+    }
+    else
+    {
+      TARGET_ANGLE = 96;
+    }
+  }
+
+  // Interpoler en douceur entre les angles cibles
+  if (current_target_angle < TARGET_ANGLE)
+  {
+    current_target_angle += angle_step;
+    if (current_target_angle > TARGET_ANGLE)
+    {
+      current_target_angle = TARGET_ANGLE;
+    }
+  }
+  else if (current_target_angle > TARGET_ANGLE)
+  {
+    current_target_angle -= angle_step;
+    if (current_target_angle < TARGET_ANGLE)
+    {
+      current_target_angle = TARGET_ANGLE;
+    }
+  }
+
+  Serial.println("Current Target Angle: " + String(current_target_angle));
+
+  return current_target_angle;
+}
+
 void loop()
 {
-  stabiliser_angle(TARGET_ANGLE);
-  delay(3); // Gestion simple du temps d'échantillonnage
+  current_target_angle = transition_avancer_stabiliser(current_target_angle);
+
+  stabiliser_angle(current_target_angle);
+  // delay(10); // Gestion simple du temps d'échantillonnage
 }
