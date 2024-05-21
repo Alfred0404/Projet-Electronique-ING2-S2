@@ -172,14 +172,14 @@ float transition_avancer_stabiliser(float current_target_angle) {
     }
   }
 
-  Serial.println("Current Target Angle: " + String(current_target_angle));
+  // Serial.println("Current Target Angle: " + String(current_target_angle));
 
   return current_target_angle;
 }
 
 void loop()
 {
-  current_target_angle = transition_avancer_stabiliser(current_target_angle);
+  // current_target_angle = transition_avancer_stabiliser(current_target_angle);
 
   stabiliser_angle(current_target_angle);
   // delay(10); // Gestion simple du temps d'échantillonnage
